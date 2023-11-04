@@ -29,47 +29,31 @@ class ChatLog:
 class CooperLLM:
     def __init__(self):
         self.chat_log = ChatLog()
-        self.config = {'splitter_chunk_size': 200,
+        self.default_config = {'splitter_chunk_size': 200,
                        'splitter_chunk_overlap': 25,
                        'llm_max_new_tokens': 256,
                        'llm_temperature': 0.2,
-                       'llm_stop': ['\n\n'],
-                       'retriever_k': 3,
-                       'prompt_template': '''
-                        You are a helpful chatbot that answers questions based on chat history and your own knowledge.
-                        Only answer the request and nothing more. Try to be concise.
-
-                        {context}
-
-                        Request: {question}
-
-                        Helpful response:
-                       '''}
-        self.personality = 'helpful_bot'
-        self.choose_prompt('mean_bot')
+                       'retriever_k': 3}
+        self.llm_stop = ['\n\n']
+        self.prompt_options = self.get_prompt_options()
         self.has_initialised = False
     
-    def init_RAG(self):
+    def init_RAG(self, config):
         #initialise RAG variables
         self.loader = TextLoader(self.chat_log.CHAT_FILE_NAME)
-        self.text_splitter = RecursiveCharacterTextSplitter(chunk_size=self.config['splitter_chunk_size'], 
-                                                       chunk_overlap=self.config['splitter_chunk_overlap'])
+        self.text_splitter = RecursiveCharacterTextSplitter(chunk_size=config['splitter_chunk_size'], 
+                                                       chunk_overlap=config['splitter_chunk_overlap'])
         self.embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2", model_kwargs={'device': 'cpu'})
 
-    def init_LLM(self):
+    def init_LLM(self, config):
         #initialise LLM 
         self.llm = CTransformers(model = 'openchat_3.5.Q6_K.gguf', 
                             model_type='mistral', 
-                            config={'max_new_tokens': self.config['llm_max_new_tokens'], 
-                                    'temperature': self.config['llm_temperature'], 
-                                    'stop': self.config['llm_stop']})
-        
-    def update_settings(self, new_configs):
-        for key in self.config.keys():
-            if key in new_configs:
-                self.config[key] = new_configs[key]
+                            config={'max_new_tokens': config['llm_max_new_tokens'], 
+                                    'temperature': config['llm_temperature'], 
+                                    'stop': self.llm_stop})
     
-    def choose_prompt(self, prompt_option):
+    def get_prompt_options(self):
         prompt_options = {
             'helpful_bot':
             '''
@@ -93,10 +77,11 @@ class CooperLLM:
 
             Rude response:
             '''}
-        
-        if prompt_option in prompt_options:
-            self.personality = prompt_option
-            self.config['prompt_template'] = prompt_options[prompt_option]
+        return prompt_options
+
+    def select_prompt(self, prompt_option):       
+        if prompt_option in self.prompt_options:
+            return self.prompt_options[prompt_option]
 
     def vectorise_chat_log(self):
         #return chat log as a vector database
@@ -105,18 +90,18 @@ class CooperLLM:
         db = FAISS.from_documents(chat_history, self.embeddings)
         return db
     
-    def get_LLM_with_chat_log(self):
+    def get_LLM_with_chat_log(self, prompt_option, config):
         #get LLM with ability to access most updated chat log
         if self.has_initialised == False:
             self.has_initialised = True
-            self.init_RAG()
-            self.init_LLM()
+            self.init_RAG(config)
+            self.init_LLM(config)
 
         db = self.vectorise_chat_log()
-        retriever = db.as_retriever(search_kwargs={'k': self.config['retriever_k']})
+        retriever = db.as_retriever(search_kwargs={'k': config['retriever_k']})
 
         prompt = PromptTemplate(
-            template=self.config['prompt_template'],
+            template=self.select_prompt(prompt_option),
             input_variables=['context', 'question'])
         
         qa_llm = RetrievalQA.from_chain_type(llm=self.llm,
@@ -130,8 +115,8 @@ class CooperLLM:
         chat_update = '\n\nRequest: ' + request + '\nResponse: ' + response
         self.chat_log.append_chat_history(chat_update)
 
-    def chat(self, request):
-        qa_llm = self.get_LLM_with_chat_log()
+    def chat(self, request, prompt_option, config):
+        qa_llm = self.get_LLM_with_chat_log(prompt_option, config)
         output = qa_llm({'query': request})
         response = output["result"]
         self.update_chat_log(request, response)
