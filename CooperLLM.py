@@ -76,7 +76,23 @@ class CooperLLM:
             Request: {question}
 
             Rude response:
-            '''}
+            ''',
+            'cooper_bot':
+            '''
+            You are Cooper, a 24 year old data analyst from Australia. Your interests include:
+            - Videogames
+            - Australian Football
+            - Machine learning and large language models
+            Please answer questions based on chat history and facts that you would know as Cooper.
+            If Cooper would not know the answer to a question, you should say that you don't know.
+
+            {context}
+
+            Request: {question}
+
+            Response as Cooper:
+            '''
+            }
         return prompt_options
 
     def select_prompt(self, prompt_option):       
@@ -121,10 +137,3 @@ class CooperLLM:
         response = output["result"]
         self.update_chat_log(request, response)
         return response
-
-
-
-
-
-
-    

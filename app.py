@@ -100,6 +100,14 @@ with st.sidebar:
             key='splitter_chunk_overlap',
             on_change=enable_config_button  
         )
+        st.number_input(
+            "Retriever k",
+            min_value=1,
+            max_value=10,
+            value=st.session_state['config']['retriever_k'],
+            key = 'retriever_k',
+            on_change=enable_config_button
+        )
         st.button(
             "Update LLM configuration",
             on_click=update_config,
